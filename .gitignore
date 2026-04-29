@@ -1,0 +1,15 @@
+checkpoints/
+outputs/
+*.pth
+*.pt
+*.ckpt
+
+__pycache__/
+*.pyc
+.DS_Store
+
+# ignore large/private datasets by default
+datasets/*
+# keep optional tiny examples if you create them
+!datasets/EndoVisSub2017/
+!datasets/EndoVisSub2017/**

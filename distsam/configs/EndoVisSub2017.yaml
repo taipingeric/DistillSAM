@@ -1,0 +1,66 @@
+dataset:
+  name: EndoVisSub2017
+  root: datasets/EndoVisSub2017
+  image_size: 1024
+  ignore_index: 255
+  background_id: 0
+  num_classes: 4
+  label_map:
+    0: 0
+    1: 1
+    2: 2
+    7: 3
+  inverse_label_map:
+    0: 0
+    1: 1
+    2: 2
+    3: 7
+  splits:
+    train:
+      image_dir: images/training
+      mask_dir: annotations/training
+    val:
+      image_dir: images/validation
+      mask_dir: annotations/validation
+model:
+  segmentation_mode: semantic
+  use_revised_decoder: true
+  adapter_type: pvt_cross
+  num_prompt_tokens: 16
+  pvt_pretrained: checkpoints/pvt/pvt_tiny.pth
+  adapter_layers: [4, 8, 12]
+  token_stride: 1
+  num_classes: 4
+  revised_decoder:
+    class_head_hidden_dim: 256
+    use_default_mask_tokens: true
+    extra_mask_tokens: 0
+kd:
+  sparse_kd:
+    enabled: true
+    target: mask_tokens_out
+    loss_type: mse
+    cos_weight: 0.0
+    teacher_prompt_strategy: fg_area_proportional_pos
+    num_prompt_tokens: 16
+    per_dataset_teacher_prompt_strategy:
+      EndoVisSub2017_full: fg_area_proportional_pos
+      vessel: fg_top2box_pos8_neg4
+  dense_kd:
+    enabled: true
+    target: dense_prompt_embeddings
+    loss_type: mse
+    cos_weight: 0.0
+    pos_logit: 10.0
+    neg_logit: -10.0
+  attention_kd:
+    enabled: true
+    target: final_attn_token_to_image
+    token_type: mask_tokens
+    loss_type: bce_dice
+    dice_weight: 1.0
+    binarize: topk_gt_area
+    topk_ratio: 0.2
+    threshold: 0.5
+    min_ratio: 0.01
+    max_ratio: 0.80
