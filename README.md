@@ -1,6 +1,6 @@
 ## Distillation-SAM: Knowledge Distillation-Based Auto-Prompt Embedding Learning for Surgical Image Segmentation
 
-### Training
+### Model Download
 
 Place the pretrained [SAM ViT-B checkpoint](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth) and [PVT-tiny checkpoint](https://github.com/whai362/PVT/releases/download/v2/pvt_tiny.pth) at:
 
@@ -8,7 +8,7 @@ Place the pretrained [SAM ViT-B checkpoint](https://dl.fbaipublicfiles.com/segme
 checkpoints/sam_vit_b_01ec64.pth
 checkpoints/pvt/pvt_tiny.pth
 ```
-
+### Training
 Then start multi-GPU semantic DistillSAM training with DDP:
 
 ```bash
@@ -38,5 +38,5 @@ BibTeX
   journal={IEEE Transactions on Medical Imaging}, 
   title={Distillation-SAM: Knowledge Distillation Based Auto-prompt Embedding Learning for Surgical Image Segmentation}, 
   year={2026}
-  }
+}
 ```
