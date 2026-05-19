@@ -30,7 +30,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python -m torch.distributed.launch \
   --device cuda \
   --save-dir outputs/EndoVisSub2017
 ```
-##### BibTeX
+### BibTeX
 ```text
 @ARTICLE{TMI26,
   author={Tang, Jiyang and Han, Hu and Shan, Shiguang and Chen, Xilin},
