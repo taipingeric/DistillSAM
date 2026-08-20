@@ -43,6 +43,10 @@ python distsam/tools/train_distillsam.py \
   --lr 1e-4 \
   --device cuda \
   --save-dir outputs/final_binary_train
+
+On the main process, logs stream to the console and to
+<save-dir>/train.log (flushed on every write, not just at buffer-fill or
+process exit) -- no shell `>` redirection needed.
 """
 
 import argparse
@@ -63,6 +67,40 @@ except ModuleNotFoundError as exc:
 SPARSE_KD_WEIGHT = 0.1
 DENSE_KD_WEIGHT = 0.1
 ATTENTION_KD_WEIGHT = 0.05
+
+
+class _Tee:
+    """Mirrors writes to multiple streams, flushing on every write."""
+
+    def __init__(self, *streams):
+        self._streams = streams
+
+    def write(self, data):
+        for stream in self._streams:
+            stream.write(data)
+            stream.flush()
+
+    def flush(self):
+        for stream in self._streams:
+            stream.flush()
+
+    def isatty(self):
+        return False
+
+
+def setup_logging(log_path):
+    """Mirrors stdout/stderr to log_path, flushed on every write.
+
+    print() output sent to a file via shell redirection (`> log.txt`) sits
+    in Python's block-buffered stdout until the buffer fills or the process
+    exits, so the log file stays empty for most of a long training run
+    otherwise. Opening our own line-buffered file handle here and teeing
+    every write to it avoids that."""
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_file = open(log_path, "a", encoding="utf-8", buffering=1)
+    sys.stdout = _Tee(sys.stdout, log_file)
+    sys.stderr = _Tee(sys.stderr, log_file)
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SEGMENT_ANYTHING_ROOT = REPO_ROOT / "segment-anything"
@@ -605,6 +643,7 @@ def main():
     device = resolve_device(args)
     if is_main_process():
         save_dir.mkdir(parents=True, exist_ok=True)
+        setup_logging(save_dir / "train.log")
 
     options = load_options(config_path, args)
     if options["kd"]["attention_kd_target"] != "final_attn_token_to_image":
