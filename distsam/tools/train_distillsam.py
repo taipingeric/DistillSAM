@@ -164,6 +164,14 @@ def parse_args():
     parser.add_argument("--attention-max-ratio", type=float, default=None)
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=1)
+    # --batch-size is PER GPU (see global_batch_size below). The paper's
+    # "batch 8 on 4x RTX 3090" is therefore 2/GPU, not 8/GPU -- asking a
+    # single 24GB card for 8/GPU is 4x the per-GPU memory their own setup
+    # used and OOMs in SAM ViT-B's windowed attention. --grad-accum-steps
+    # recovers the paper's *global* batch on one GPU: pass e.g.
+    # --batch-size 2 --grad-accum-steps 4 for global batch 8, matching
+    # both the paper and our own Stage A run.
+    parser.add_argument("--grad-accum-steps", type=int, default=1)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--save-dir", default="outputs/final_train")
@@ -409,7 +417,8 @@ def write_train_config(save_dir, args, options, param_summary):
         "lr": args.lr,
         "batch_size_per_gpu": args.batch_size,
         "world_size": get_world_size(),
-        "global_batch_size": args.batch_size * get_world_size(),
+        "grad_accum_steps": args.grad_accum_steps,
+        "global_batch_size": args.batch_size * get_world_size() * args.grad_accum_steps,
         "epochs": args.epochs,
         "eval_interval": args.eval_interval,
         "save_interval": args.save_interval,
@@ -435,6 +444,9 @@ def run_epoch(model, loader, dataset, optimizer, device, options, train, epoch, 
     dataset_cfg = options["dataset"]
     segmentation_mode = model_cfg["segmentation_mode"]
     metric_num_classes = model_cfg["num_classes"] if segmentation_mode == "semantic" else 2
+    accum_steps = max(1, getattr(args, "grad_accum_steps", 1))
+    if train:
+        optimizer.zero_grad(set_to_none=True)
 
     for step, batch in enumerate(loader, start=1):
         image = batch["image"].to(device, non_blocking=True)
@@ -539,9 +551,14 @@ def run_epoch(model, loader, dataset, optimizer, device, options, train, epoch, 
 
         loss = seg_loss["loss"] + kd_sparse + kd_dense + kd_attn
         if train:
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            # Scale so accumulated grads average (not sum) over the
+            # accum window -- keeps the effective LR identical to running
+            # the same global batch in one step. accum_steps=1 reduces to
+            # the original zero_grad/backward/step behaviour exactly.
+            (loss / accum_steps).backward()
+            if step % accum_steps == 0 or step == len(loader):
+                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)
 
         if segmentation_mode == "semantic":
             pred = output["semantic_logits"].argmax(dim=1)
